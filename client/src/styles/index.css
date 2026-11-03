@@ -1,0 +1,151 @@
+@import 'tailwindcss';
+
+/* Dark mode is driven by a class on <html>, set by ThemeProvider (and the inline script in index.html). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens. Components only use the semantic utilities generated below (bg-surface,
+ * text-fg-muted, border-border, ...), so a theme is just a different set of values here.
+ * Palette: cool lilac-grey paper, deep plum ink accent, separate status hues.
+ */
+:root {
+  color-scheme: light;
+  --canvas: #f5f4f8;
+  --surface: #ffffff;
+  --surface-muted: #ecebf1;
+  --border: #dddae6;
+  --border-strong: #c4c0d1;
+  --fg: #231f2e;
+  --fg-muted: #5f5a6e;
+  --fg-subtle: #706b80;
+  --accent: #7a3b69;
+  --accent-hover: #672f58;
+  --accent-fg: #ffffff;
+  --accent-soft: #f1e4ee;
+  --accent-soft-fg: #5e2a50;
+  --danger: #b3261e;
+  --danger-hover: #961f19;
+  --danger-soft: #fbe7e5;
+  --success: #1f7a4d;
+  --success-soft: #e1f3ea;
+  --warning: #9a5b00;
+  --warning-soft: #fcefd6;
+  --overlay: rgb(20 14 28 / 0.5);
+}
+
+.dark {
+  color-scheme: dark;
+  --canvas: #15121b;
+  --surface: #1d1925;
+  --surface-muted: #272231;
+  --border: #373143;
+  --border-strong: #4c4560;
+  --fg: #eeebf4;
+  --fg-muted: #b0aabf;
+  --fg-subtle: #8f89a0;
+  --accent: #d79bc9;
+  --accent-hover: #e4b1d8;
+  --accent-fg: #2a1124;
+  --accent-soft: #3a2336;
+  --accent-soft-fg: #f0c9e6;
+  --danger: #ff8a80;
+  --danger-hover: #ffa8a0;
+  --danger-soft: #3f1e1d;
+  --success: #6fd3a0;
+  --success-soft: #17342a;
+  --warning: #f3b45c;
+  --warning-soft: #3a2c12;
+  --overlay: rgb(0 0 0 / 0.65);
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-fg: var(--accent-soft-fg);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+
+  --font-sans: 'Figtree Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display:
+    'Bricolage Grotesque Variable', 'Figtree Variable', ui-sans-serif, system-ui, sans-serif;
+
+  /* Controls are tighter than panels; only floating layers get a shadow. */
+  --radius-control: 0.5rem;
+  --radius-panel: 0.875rem;
+  --shadow-popover: 0 12px 32px -8px rgb(20 14 28 / 0.28), 0 2px 6px rgb(20 14 28 / 0.12);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--accent-soft);
+    color: var(--accent-soft-fg);
+  }
+
+  /* Native <dialog> modals do not lock page scroll on their own. */
+  body:has(dialog[open]) {
+    overflow: hidden;
+  }
+
+  dialog::backdrop {
+    background-color: var(--overlay);
+  }
+
+  /* Opening a dialog answers a user action, so a short fade is welcome. */
+  dialog[open] {
+    animation: dialog-in 140ms ease-out;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
