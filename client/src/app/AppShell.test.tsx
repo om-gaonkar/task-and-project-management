@@ -103,4 +103,26 @@ describe('app shell', () => {
     expect(document.documentElement).toHaveClass('dark');
     expect(window.localStorage.getItem('workspace.theme')).toBe('dark');
   });
+
+  it('shows who is signed in and links to settings from the account menu', async () => {
+    const user = userEvent.setup();
+    renderRoutes(appRoutes, ['/projects']);
+
+    await user.click(screen.getByRole('button', { name: 'Account menu for Ada Lovelace' }));
+    const menu = screen.getByRole('menu', { name: 'Account' });
+    expect(within(menu).getByText('Ada Lovelace')).toBeInTheDocument();
+    expect(within(menu).getByText('ada@example.com')).toBeInTheDocument();
+
+    await user.click(within(menu).getByRole('menuitem', { name: 'Settings' }));
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+  });
+
+  it('sends a signed-out visitor to the sign-in page instead of the app', () => {
+    const router = renderRoutes(appRoutes, ['/projects'], { auth: 'signed-out' });
+
+    expect(router.state.location.pathname).toBe('/login');
+    expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Primary' })).not.toBeInTheDocument();
+  });
 });

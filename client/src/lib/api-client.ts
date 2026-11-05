@@ -37,7 +37,35 @@ export interface RequestOptions {
   body?: unknown;
   query?: Record<string, QueryValue>;
   signal?: AbortSignal;
+  /**
+   * For the auth endpoints themselves (login, refresh, logout): no bearer token is attached and a
+   * 401 is returned as an error instead of triggering a refresh and a retry.
+   */
+  skipAuth?: boolean;
 }
+
+/**
+ * What the client needs from the signed-in session. The auth feature registers the real
+ * implementation, which keeps this file free of any import from features.
+ */
+export interface AuthHooks {
+  getAccessToken: () => string | null;
+  /** Exchanges the refresh cookie for a new access token. Resolves null when that is impossible. */
+  refresh: () => Promise<string | null>;
+}
+
+let authHooks: AuthHooks = { getAccessToken: () => null, refresh: async () => null };
+
+export function setAuthHooks(hooks: AuthHooks): void {
+  authHooks = hooks;
+}
+
+/**
+ * Sent on every state-changing request. A page on another origin cannot add a custom header
+ * without a CORS preflight, which the API refuses for origins outside its allowlist: this is the
+ * CSRF defence for the cookie-authenticated routes (see server/src/middleware/csrf.ts).
+ */
+const CSRF_HEADER = 'X-CSRF-Token';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -88,26 +116,24 @@ function toApiError(status: number, payload: unknown): ApiError {
   });
 }
 
-/**
- * The single entry point for talking to the API: base URL, JSON handling, cookies and error
- * normalisation live here. Phase 2 adds the single-flight token refresh at this seam, so feature
- * code never has to change.
- */
-export async function apiRequestRaw<T>(
+async function send(
   path: string,
-  options: RequestOptions = {},
-): Promise<ApiEnvelope<T>> {
+  options: RequestOptions,
+  accessToken: string | null,
+): Promise<Response> {
+  const method = options.method ?? 'GET';
   const headers: Record<string, string> = { Accept: 'application/json' };
   let body: string | undefined;
   if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(options.body);
   }
+  if (method !== 'GET') headers[CSRF_HEADER] = '1';
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
-  let response: Response;
   try {
-    response = await fetch(buildUrl(path, options.query), {
-      method: options.method ?? 'GET',
+    return await fetch(buildUrl(path, options.query), {
+      method,
       headers,
       body,
       credentials: 'include',
@@ -120,6 +146,25 @@ export async function apiRequestRaw<T>(
       code: 'NETWORK_ERROR',
       message: 'Could not reach the server. Check your connection and try again.',
     });
+  }
+}
+
+/**
+ * The single entry point for talking to the API: base URL, JSON handling, cookies, the bearer
+ * token, one refresh-and-retry on 401, and error normalisation live here, so feature code never
+ * deals with any of it.
+ */
+export async function apiRequestRaw<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<ApiEnvelope<T>> {
+  const initialToken = options.skipAuth ? null : authHooks.getAccessToken();
+  let response = await send(path, options, initialToken);
+
+  // An expired access token is routine. Refresh once and replay the request; a second 401 is real.
+  if (response.status === 401 && !options.skipAuth) {
+    const refreshed = await authHooks.refresh();
+    if (refreshed) response = await send(path, options, refreshed);
   }
 
   if (response.status === 204) return { success: true, data: undefined as T };
@@ -140,7 +185,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return (await apiRequestRaw<T>(path, options)).data;
 }
 
-type ReadOptions = Pick<RequestOptions, 'query' | 'signal'>;
+type ReadOptions = Pick<RequestOptions, 'query' | 'signal' | 'skipAuth'>;
 
 export const api = {
   get: <T>(path: string, options?: ReadOptions) =>

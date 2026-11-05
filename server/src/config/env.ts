@@ -50,7 +50,29 @@ const trustProxy = z
     return z.NEVER;
   });
 
-const envSchema = z.object({
+const optionalBoolean = z
+  .string()
+  .optional()
+  .transform((value, ctx): boolean | undefined => {
+    if (value === undefined || value.trim() === '') return undefined;
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1') return true;
+    if (normalized === 'false' || normalized === '0') return false;
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Must be "true" or "false"' });
+    return z.NEVER;
+  });
+
+const secret = (name: string) =>
+  z
+    .string({ required_error: `${name} is required` })
+    .min(32, `${name} must be at least 32 characters. Generate one with: openssl rand -base64 48`);
+
+const optionalString = z
+  .string()
+  .optional()
+  .transform((value) => (value && value.trim() !== '' ? value.trim() : undefined));
+
+const envObject = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(5000),
   CLIENT_URL: clientOrigins,
@@ -59,9 +81,63 @@ const envSchema = z.object({
     .regex(/^mongodb(\+srv)?:\/\//, 'MONGODB_URI must start with mongodb:// or mongodb+srv://'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   TRUST_PROXY: trustProxy,
+
+  // --- Authentication ---
+  ACCESS_TOKEN_SECRET: secret('ACCESS_TOKEN_SECRET'),
+  REFRESH_TOKEN_SECRET: secret('REFRESH_TOKEN_SECRET'),
+  ACCESS_TOKEN_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(15),
+  /** Sliding lifetime: every rotation issues a refresh token valid for this many days. */
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(7),
+  /** Hard cap on one login session, however often it is refreshed. */
+  SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  /** Defaults to true in production and false elsewhere. */
+  COOKIE_SECURE: optionalBoolean,
+  /** lax for same-site deployments (app.example.com + api.example.com), none for cross-site. */
+  COOKIE_SAME_SITE: z.enum(['lax', 'strict', 'none']).default('lax'),
+
+  // --- Google sign-in (optional: set all three or none) ---
+  GOOGLE_CLIENT_ID: optionalString,
+  GOOGLE_CLIENT_SECRET: optionalString,
+  GOOGLE_CALLBACK_URL: optionalString.refine(
+    (value) => value === undefined || /^https?:\/\//.test(value),
+    'GOOGLE_CALLBACK_URL must be a full http(s) URL',
+  ),
 });
 
-export type Env = z.infer<typeof envSchema>;
+const envSchema = envObject
+  .superRefine((value, ctx) => {
+    if (value.ACCESS_TOKEN_SECRET === value.REFRESH_TOKEN_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['REFRESH_TOKEN_SECRET'],
+        message: 'REFRESH_TOKEN_SECRET must differ from ACCESS_TOKEN_SECRET',
+      });
+    }
+    const google = [value.GOOGLE_CLIENT_ID, value.GOOGLE_CLIENT_SECRET, value.GOOGLE_CALLBACK_URL];
+    if (google.some(Boolean) && !google.every(Boolean)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['GOOGLE_CLIENT_ID'],
+        message:
+          'Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_CALLBACK_URL together, or none of them',
+      });
+    }
+  })
+  .transform((value) => {
+    const cookieSecure = value.COOKIE_SECURE ?? value.NODE_ENV === 'production';
+    return { ...value, COOKIE_SECURE: cookieSecure };
+  })
+  .superRefine((value, ctx) => {
+    if (value.COOKIE_SAME_SITE === 'none' && !value.COOKIE_SECURE) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['COOKIE_SAME_SITE'],
+        message: 'COOKIE_SAME_SITE=none requires COOKIE_SECURE=true (browsers reject it otherwise)',
+      });
+    }
+  });
+
+export type Env = z.output<typeof envSchema>;
 
 export class EnvValidationError extends Error {
   constructor(message: string) {

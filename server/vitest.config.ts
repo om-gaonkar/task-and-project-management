@@ -11,6 +11,8 @@ export default defineConfig({
       CLIENT_URL: 'http://localhost:5173',
       MONGODB_URI: 'mongodb://127.0.0.1:27017/workspace_test',
       LOG_LEVEL: 'silent',
+      ACCESS_TOKEN_SECRET: 'test-access-secret-test-access-secret-0001',
+      REFRESH_TOKEN_SECRET: 'test-refresh-secret-test-refresh-secret-0002',
     },
   },
 });

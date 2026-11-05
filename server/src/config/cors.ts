@@ -3,8 +3,8 @@ import { env } from './env';
 
 /**
  * Explicit origin allowlist with credentials. A wildcard is never emitted, which browsers would
- * reject for credentialed requests anyway. Note that CORS is not CSRF protection; the CSRF
- * middleware arrives with authentication in phase 2.
+ * reject for credentialed requests anyway. CORS is not CSRF protection by itself; the cookie
+ * routes add middleware/csrf.ts on top of it.
  */
 export function buildCorsOptions(allowedOrigins: readonly string[]): CorsOptions {
   const allowed = new Set(allowedOrigins);
@@ -19,7 +19,7 @@ export function buildCorsOptions(allowedOrigins: readonly string[]): CorsOptions
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'X-CSRF-Token', 'X-Request-Id'],
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-CSRF-Token', 'X-Request-Id'],
     exposedHeaders: ['X-Request-Id'],
     maxAge: 600,
   };

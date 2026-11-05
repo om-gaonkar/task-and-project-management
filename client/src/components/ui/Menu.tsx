@@ -37,6 +37,8 @@ interface MenuProps {
   label: string;
   items: MenuItem[];
   align?: 'start' | 'end';
+  /** Non-interactive content above the items, for example who is signed in. */
+  header?: ReactNode;
   /** Spread the given props onto a Button or IconButton. */
   renderTrigger: (props: MenuTriggerProps) => ReactNode;
 }
@@ -44,7 +46,7 @@ interface MenuProps {
 const ITEM_SELECTOR = '[role^="menuitem"]';
 
 /** Dropdown menu following the ARIA menu button pattern: arrows, Home/End, Escape, Tab. */
-export function Menu({ label, items, align = 'start', renderTrigger }: MenuProps) {
+export function Menu({ label, items, align = 'start', header, renderTrigger }: MenuProps) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -143,6 +145,11 @@ export function Menu({ label, items, align = 'start', renderTrigger }: MenuProps
             align === 'end' ? 'right-0' : 'left-0',
           )}
         >
+          {header && (
+            <div role="presentation" className="mb-1 border-b border-border px-2.5 pb-2 pt-1.5">
+              {header}
+            </div>
+          )}
           {items.map((item) => {
             const Icon = item.icon;
             return (

@@ -1,6 +1,7 @@
 import { Menu as MenuIcon, Search } from 'lucide-react';
 import { IconButton } from '@/components/ui/IconButton';
 import { ThemeToggle } from '@/features/settings/appearance/ThemeToggle';
+import { ProfileMenu } from './ProfileMenu';
 import { QuickCreateMenu } from './QuickCreateMenu';
 
 const SHORTCUT =
@@ -37,6 +38,7 @@ export function Topbar({ onOpenNav, onOpenPalette }: TopbarProps) {
         <IconButton label="Search" icon={Search} onClick={onOpenPalette} className="md:hidden" />
         <QuickCreateMenu />
         <ThemeToggle />
+        <ProfileMenu />
       </div>
     </header>
   );

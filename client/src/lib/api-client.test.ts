@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, api } from './api-client';
+import { ApiError, api, setAuthHooks } from './api-client';
 
 type FetchArgs = [RequestInfo | URL, RequestInit | undefined];
 
@@ -14,6 +14,7 @@ const json = (body: unknown, status = 200) =>
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  setAuthHooks({ getAccessToken: () => null, refresh: async () => null });
 });
 
 describe('api client', () => {
@@ -93,5 +94,51 @@ describe('api client', () => {
     stubFetch(async () => json({ unexpected: true }));
 
     await expect(api.get('/ping')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
+
+  it('sends the CSRF header on writes but not on reads', async () => {
+    const fetchMock = stubFetch(async () => json({ success: true, data: {} }));
+
+    await api.get('/things');
+    await api.post('/things', {});
+    await api.delete('/things/1');
+
+    const headers = fetchMock.mock.calls.map(([, init]) => init?.headers as Record<string, string>);
+    expect(headers[0]['X-CSRF-Token']).toBeUndefined();
+    expect(headers[1]['X-CSRF-Token']).toBe('1');
+    expect(headers[2]['X-CSRF-Token']).toBe('1');
+  });
+
+  it('attaches the bearer token unless the call opts out', async () => {
+    setAuthHooks({ getAccessToken: () => 'secret-token', refresh: async () => null });
+    const fetchMock = stubFetch(async () => json({ success: true, data: {} }));
+
+    await api.get('/things');
+    await api.post('/auth/login', {}, { skipAuth: true });
+
+    const [signedIn, skipped] = fetchMock.mock.calls.map(
+      ([, init]) => init?.headers as Record<string, string>,
+    );
+    expect(signedIn.Authorization).toBe('Bearer secret-token');
+    expect(skipped.Authorization).toBeUndefined();
+  });
+
+  it('never tries to refresh a 401 from a skipAuth call', async () => {
+    const refresh = vi.fn(async () => 'new-token');
+    setAuthHooks({ getAccessToken: () => null, refresh });
+    stubFetch(async () =>
+      json(
+        {
+          success: false,
+          error: { code: 'UNAUTHENTICATED', message: 'Invalid email or password' },
+        },
+        401,
+      ),
+    );
+
+    await expect(api.post('/auth/login', {}, { skipAuth: true })).rejects.toMatchObject({
+      status: 401,
+    });
+    expect(refresh).not.toHaveBeenCalled();
   });
 });
